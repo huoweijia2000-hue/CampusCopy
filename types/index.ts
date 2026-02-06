@@ -1,4 +1,8 @@
-import { GeoPoint, Timestamp } from 'firebase/firestore';
+// Supabase Compatible Types
+export interface GeoPoint {
+    latitude: number;
+    longitude: number;
+}
 
 // User Types
 export interface User {
@@ -8,7 +12,7 @@ export interface User {
     major: string;
     avatarUrl: string;
     location?: GeoPoint;
-    createdAt: Timestamp;
+    createdAt: Date;
 }
 
 // Social Tags Options
@@ -37,13 +41,14 @@ export interface Post {
     authorTags?: string[];
     authorAvatar?: string;
     content: string;
+    type?: PostType;
     category?: PostCategory;
     imageUrl?: string;
     images?: string[];
     locationTag?: string;
     geoPoint?: GeoPoint;
     createdAt: Date;
-    timestamp?: Timestamp;
+    timestamp?: Date;
     likes: number;
     isLiked?: boolean;
     comments: number;
@@ -78,14 +83,14 @@ export interface ChatRoom {
     id: string;
     participants: string[];
     lastMessage: string;
-    lastMessageTime: Timestamp;
+    lastMessageTime: Date;
 }
 
 export interface Message {
     id: string;
     senderId: string;
     content: string;
-    timestamp: Timestamp;
+    timestamp: Date;
     read: boolean;
 }
 
