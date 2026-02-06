@@ -1,65 +1,209 @@
 import { CourseTeaming, TeamingComment } from '../types';
+import { supabase } from './supabase';
+
+const TEAMING_TABLE = 'course_teaming';
+const TEAMING_COMMENTS_TABLE = 'teaming_comments';
 
 /**
  * Fetch teaming requests for a specific course.
- * MOCK: Returns dummy data for development.
  */
 export const fetchTeamingRequests = async (courseId: string): Promise<CourseTeaming[]> => {
-    // In a real app, this would be a Supabase query
-    return getMockTeaming(courseId);
+    try {
+        const { data, error } = await supabase
+            .from(TEAMING_TABLE)
+            .select('*')
+            .eq('course_id', courseId)
+            .eq('status', 'open')
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            console.error('Error fetching teaming requests:', error);
+            return getMockTeaming(courseId);
+        }
+
+        return (data || []).map(mapSupabaseToTeaming);
+    } catch (e) {
+        console.error('Exception fetching teaming requests:', e);
+        return getMockTeaming(courseId);
+    }
 };
 
 /**
  * Post a new teaming request.
- * MOCK: Simulates success.
  */
 export const postTeamingRequest = async (request: Partial<CourseTeaming>): Promise<{ success: boolean; data?: CourseTeaming }> => {
-    console.log('Mock postTeamingRequest:', request);
-    return {
-        success: true,
-        data: {
-            ...request,
-            id: `local_${Date.now()}`,
-            createdAt: new Date(),
+    try {
+        const teamingData = {
+            course_id: request.courseId,
+            user_id: request.userId,
+            user_name: request.userName,
+            user_avatar: request.userAvatar,
+            user_major: request.userMajor,
+            section: request.section,
+            self_intro: request.selfIntro,
+            target_teammate: request.targetTeammate,
+            contacts: request.contacts,
             status: 'open',
             likes: 0,
-            commentCount: 0
-        } as CourseTeaming
-    };
+            comment_count: 0,
+        };
+
+        const { data, error } = await supabase
+            .from(TEAMING_TABLE)
+            .insert(teamingData)
+            .select()
+            .single();
+
+        if (error) throw error;
+
+        return {
+            success: true,
+            data: mapSupabaseToTeaming(data),
+        };
+    } catch (e) {
+        console.error('Error posting teaming request:', e);
+        return {
+            success: false,
+        };
+    }
 };
 
 /**
  * Toggle like for a teaming request.
  */
 export const toggleTeamingLike = async (teamingId: string, userId: string): Promise<{ success: boolean }> => {
-    console.log('Mock toggleTeamingLike:', { teamingId, userId });
-    return { success: true };
+    try {
+        // Get current likes
+        const { data: teaming, error: fetchError } = await supabase
+            .from(TEAMING_TABLE)
+            .select('likes')
+            .eq('id', teamingId)
+            .single();
+
+        if (fetchError || !teaming) return { success: false };
+
+        // Update likes
+        const { error: updateError } = await supabase
+            .from(TEAMING_TABLE)
+            .update({ likes: (teaming.likes || 0) + 1 })
+            .eq('id', teamingId);
+
+        if (updateError) return { success: false };
+        return { success: true };
+    } catch (e) {
+        console.error('Error toggling like:', e);
+        return { success: false };
+    }
 };
 
 /**
  * Fetch comments for a teaming request.
  */
 export const fetchTeamingComments = async (teamingId: string): Promise<TeamingComment[]> => {
-    return [
-        {
-            id: 'tc1',
-            teamingId,
-            authorId: 'u5',
-            authorName: 'David Chen',
-            authorAvatar: '👨‍🎓',
-            content: 'I am interested! I am in Sec1 too.',
-            createdAt: new Date(Date.now() - 3600000)
+    try {
+        const { data, error } = await supabase
+            .from(TEAMING_COMMENTS_TABLE)
+            .select('*')
+            .eq('teaming_id', teamingId)
+            .order('created_at', { ascending: true });
+
+        if (error) {
+            console.error('Error fetching teaming comments:', error);
+            return getMockTeamingComments(teamingId);
         }
-    ];
+
+        return (data || []).map(mapSupabaseToTeamingComment);
+    } catch (e) {
+        console.error('Exception fetching teaming comments:', e);
+        return getMockTeamingComments(teamingId);
+    }
 };
 
 /**
  * Post a comment to a teaming request.
  */
 export const postTeamingComment = async (teamingId: string, author: any, content: string): Promise<{ success: boolean }> => {
-    console.log('Mock postTeamingComment:', { teamingId, author, content });
-    return { success: true };
+    try {
+        const { error: insertError } = await supabase
+            .from(TEAMING_COMMENTS_TABLE)
+            .insert({
+                teaming_id: teamingId,
+                author_id: author.id,
+                author_name: author.name,
+                author_avatar: author.avatar,
+                content,
+            });
+
+        if (insertError) throw insertError;
+
+        // Increment comment count
+        await incrementTeamingCommentCount(teamingId);
+
+        return { success: true };
+    } catch (e) {
+        console.error('Error posting teaming comment:', e);
+        return { success: false };
+    }
 };
+
+// Helper functions
+const mapSupabaseToTeaming = (data: any): CourseTeaming => ({
+    id: data.id,
+    courseId: data.course_id,
+    userId: data.user_id,
+    userName: data.user_name,
+    userAvatar: data.user_avatar,
+    userMajor: data.user_major,
+    section: data.section,
+    selfIntro: data.self_intro,
+    targetTeammate: data.target_teammate,
+    contacts: data.contacts,
+    createdAt: new Date(data.created_at),
+    status: data.status,
+    likes: data.likes || 0,
+    commentCount: data.comment_count || 0,
+});
+
+const mapSupabaseToTeamingComment = (data: any): TeamingComment => ({
+    id: data.id,
+    teamingId: data.teaming_id,
+    authorId: data.author_id,
+    authorName: data.author_name,
+    authorAvatar: data.author_avatar,
+    content: data.content,
+    createdAt: new Date(data.created_at),
+});
+
+const incrementTeamingCommentCount = async (teamingId: string) => {
+    try {
+        const { data: teaming } = await supabase
+            .from(TEAMING_TABLE)
+            .select('comment_count')
+            .eq('id', teamingId)
+            .single();
+
+        if (teaming) {
+            await supabase
+                .from(TEAMING_TABLE)
+                .update({ comment_count: (teaming.comment_count || 0) + 1 })
+                .eq('id', teamingId);
+        }
+    } catch (e) {
+        console.error('Error incrementing comment count:', e);
+    }
+};
+
+const getMockTeamingComments = (teamingId: string): TeamingComment[] => [
+    {
+        id: 'tc1',
+        teamingId,
+        authorId: 'u5',
+        authorName: 'David Chen',
+        authorAvatar: '👨‍🎓',
+        content: 'I am interested! I am in Sec1 too.',
+        createdAt: new Date(Date.now() - 3600000)
+    }
+];
 
 /**
  * Mock data generator.

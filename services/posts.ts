@@ -163,8 +163,10 @@ const mapSupabaseToPost = (data: any): Post => {
             latitude: data.lat,
             longitude: data.lng
         },
+        createdAt: new Date(data.created_at),
         timestamp: new Date(data.created_at),
         likes: data.likes || 0,
-        comments: 0 // Placeholder, implement comments table later if needed
+        comments: 0, // Placeholder, implement comments table later if needed
+        isAnonymous: false // Default to non-anonymous
     };
 };
