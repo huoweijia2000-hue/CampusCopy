@@ -41,6 +41,8 @@
     "courses": {
         "title": "课程点评",
         "search_placeholder": "输入课程代码...",
+        "favorites": "我的收藏",
+        "all_courses": "全部课程",
         "add_new_course": "添加新课程",
         "no_courses_found": "未找到相关课程"
     },
@@ -84,6 +86,8 @@
             "food": "美食",
             "buildings": "建筑",
             "classroom": "教室",
+            "find_classroom": "找教室",
+            "order_food": "线上点餐",
             "show": "显示",
             "hide": "隐藏",
             "edit": "编辑",

@@ -28,6 +28,10 @@ export default function BuildingDetail() {
     const [building, setBuilding] = useState<CampusLocation | undefined>(CAMPUS_BUILDINGS.find(b => b.id === id));
     const [loading, setLoading] = useState(true);
 
+    const goBackToClassroom = () => {
+        router.replace('/(tabs)/classroom' as any);
+    };
+
     React.useEffect(() => {
         const fetchBuilding = async () => {
             setLoading(true);
@@ -58,7 +62,7 @@ export default function BuildingDetail() {
         return (
             <View style={styles.errorContainer}>
                 <Text>Building not found</Text>
-                <TouchableOpacity onPress={() => router.back()}>
+                <TouchableOpacity onPress={goBackToClassroom}>
                     <Text style={styles.backLink}>Back to list</Text>
                 </TouchableOpacity>
             </View>
@@ -84,7 +88,7 @@ export default function BuildingDetail() {
         <View style={styles.container}>
             {/* Header */}
             <View style={styles.header}>
-                <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+                <TouchableOpacity style={styles.backButton} onPress={goBackToClassroom}>
                     <ChevronLeft size={24} color="#111" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle} numberOfLines={1}>{building.name}</Text>

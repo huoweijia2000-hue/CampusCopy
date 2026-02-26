@@ -58,7 +58,6 @@ export default function CourseDetailScreen() {
     const [modalVisible, setModalVisible] = useState(false);
     const [sortBy, setSortBy] = useState<'newest' | 'likes'>('newest');
     const [likedReviewIds, setLikedReviewIds] = useState<string[]>([]);
-    const [favoriteReviewIds, setFavoriteReviewIds] = useState<string[]>([]);
     const [teamingRequests, setTeamingRequests] = useState<CourseTeaming[]>([]);
     const [isTeamingModalVisible, setIsTeamingModalVisible] = useState(false);
     const [teamingLoading, setTeamingLoading] = useState(false);
@@ -114,14 +113,6 @@ export default function CourseDetailScreen() {
             if (likedStr) setLikedReviewIds(JSON.parse(likedStr));
         } catch (e) {
             console.error('Error loading liked reviews:', e);
-        }
-
-        // Load favorited reviews from local storage
-        try {
-            const favoriteStr = await AsyncStorage.getItem('hkcampus_favorite_reviews');
-            if (favoriteStr) setFavoriteReviewIds(JSON.parse(favoriteStr));
-        } catch (e) {
-            console.error('Error loading favorite reviews:', e);
         }
 
         const courseData = await getCourseById(id as string);
@@ -330,21 +321,6 @@ export default function CourseDetailScreen() {
         }
     };
 
-    const handleToggleFavorite = async (reviewId: string) => {
-        const isFavorited = favoriteReviewIds.includes(reviewId);
-        const nextIds = isFavorited
-            ? favoriteReviewIds.filter(id => id !== reviewId)
-            : [...favoriteReviewIds, reviewId];
-
-        setFavoriteReviewIds(nextIds);
-
-        try {
-            await AsyncStorage.setItem('hkcampus_favorite_reviews', JSON.stringify(nextIds));
-        } catch (e) {
-            console.error('Error saving favorite status:', e);
-        }
-    };
-
     const handlePostTeaming = async () => {
         if (!user) {
             Alert.alert('Error', 'Please login first');
@@ -474,7 +450,6 @@ export default function CourseDetailScreen() {
         }
         return b.createdAt.getTime() - a.createdAt.getTime();
     });
-    const favoriteReviews = sortedReviews.filter(r => favoriteReviewIds.includes(r.id));
 
     const renderReviewItem = ({ item }: { item: Review }) => (
         <View style={styles.reviewCard}>
@@ -492,14 +467,19 @@ export default function CourseDetailScreen() {
                         <Text style={styles.semester}>{item.semester}</Text>
                     </View>
                 </View>
+                <View style={styles.reviewRating}>
+                    {item.rating ? (
+                        <>
+                            <Star size={14} color="#F59E0B" fill="#F59E0B" />
+                            <Text style={styles.ratingValue}>{item.rating}.0</Text>
+                        </>
+                    ) : (
+                        <Text style={[styles.ratingValue, { color: '#6B7280' }]}>Update</Text>
+                    )}
+                </View>
             </View>
 
             <View style={styles.tagsContainer}>
-                {item.rating ? (
-                    <View style={[styles.tag, styles.ratingTag]}>
-                        <Text style={styles.tagText}>评分: {item.rating}/5</Text>
-                    </View>
-                ) : null}
                 {item.tags.map((tag, index) => (
                     <View key={index} style={styles.tag}>
                         <Text style={styles.tagText}>{tag}</Text>
@@ -514,34 +494,22 @@ export default function CourseDetailScreen() {
 
             <View style={styles.reviewFooter}>
                 <Text style={styles.date}>{item.createdAt.toLocaleDateString()}</Text>
-                <View style={styles.reviewActionsRight}>
-                    <TouchableOpacity
-                        style={styles.likeButton}
-                        onPress={() => handleLike(item.id)}
-                    >
-                        <ThumbsUp
-                            size={14}
-                            color={likedReviewIds.includes(item.id) ? "#4B0082" : "#6B7280"}
-                            fill={likedReviewIds.includes(item.id) ? "#4B0082" : "transparent"}
-                        />
-                        <Text style={[
-                            styles.likeCount,
-                            likedReviewIds.includes(item.id) && { color: '#4B0082', fontWeight: 'bold' }
-                        ]}>
-                            {item.likes}
-                        </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={styles.reviewRowFavoriteButton}
-                        onPress={() => handleToggleFavorite(item.id)}
-                    >
-                        <Star
-                            size={18}
-                            color={favoriteReviewIds.includes(item.id) ? '#FFD700' : '#D1D5DB'}
-                            fill={favoriteReviewIds.includes(item.id) ? '#FFD700' : 'transparent'}
-                        />
-                    </TouchableOpacity>
-                </View>
+                <TouchableOpacity
+                    style={styles.likeButton}
+                    onPress={() => handleLike(item.id)}
+                >
+                    <ThumbsUp
+                        size={14}
+                        color={likedReviewIds.includes(item.id) ? "#4B0082" : "#6B7280"}
+                        fill={likedReviewIds.includes(item.id) ? "#4B0082" : "transparent"}
+                    />
+                    <Text style={[
+                        styles.likeCount,
+                        likedReviewIds.includes(item.id) && { color: '#4B0082', fontWeight: 'bold' }
+                    ]}>
+                        {item.likes}
+                    </Text>
+                </TouchableOpacity>
             </View>
         </View>
     );
@@ -709,35 +677,6 @@ export default function CourseDetailScreen() {
                                     <Text style={[styles.sortText, sortBy === 'likes' && styles.sortTextActive]}>Top Rated</Text>
                                 </TouchableOpacity>
                             </View>
-
-                            {favoriteReviews.length > 0 && (
-                                <View style={styles.favoriteSection}>
-                                    <Text style={styles.favoriteSectionTitle}>⭐ 我的收藏</Text>
-                                    <ScrollView
-                                        horizontal
-                                        showsHorizontalScrollIndicator={false}
-                                        contentContainerStyle={styles.favoriteListContent}
-                                    >
-                                        {favoriteReviews.map((fav) => (
-                                            <View key={`fav-${fav.id}`} style={styles.favoriteReviewCard}>
-                                                <View style={styles.favoriteReviewHeader}>
-                                                    <Text style={styles.favoriteReviewAuthor} numberOfLines={1}>{fav.authorName}</Text>
-                                                    <TouchableOpacity
-                                                        style={styles.reviewRowFavoriteButton}
-                                                        onPress={() => handleToggleFavorite(fav.id)}
-                                                    >
-                                                        <Star size={18} color="#FFD700" fill="#FFD700" />
-                                                    </TouchableOpacity>
-                                                </View>
-                                                <Text style={styles.favoriteReviewContent} numberOfLines={2}>{fav.content}</Text>
-                                                <Text style={styles.favoriteReviewMeta} numberOfLines={1}>
-                                                    {fav.rating ? `评分 ${fav.rating}/5` : '未评分'} · {fav.createdAt.toLocaleDateString()}
-                                                </Text>
-                                            </View>
-                                        ))}
-                                    </ScrollView>
-                                </View>
-                            )}
 
                             {sortedReviews.length === 0 ? (
                                 <View style={styles.emptyContainer}>
@@ -1418,9 +1357,17 @@ const styles = StyleSheet.create({
     },
     authorName: { fontSize: 14, fontWeight: '600', color: '#111827' },
     semester: { fontSize: 11, color: '#9CA3AF' },
+    reviewRating: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FFFBEB',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 8,
+    },
+    ratingValue: { color: '#D97706', fontWeight: 'bold', marginLeft: 4, fontSize: 12 },
     tagsContainer: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 12, gap: 8 },
     tag: { backgroundColor: '#F3F4F6', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
-    ratingTag: { backgroundColor: '#FFFBEB' },
     difficultyTag: { backgroundColor: '#FEF2F2' },
     tagText: { fontSize: 11, color: '#4B5563' },
     reviewContent: { fontSize: 14, color: '#374151', lineHeight: 20, marginBottom: 12 },
@@ -1432,14 +1379,8 @@ const styles = StyleSheet.create({
         borderTopColor: '#F9FAFB',
         paddingTop: 12,
     },
-    reviewActionsRight: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-    },
     date: { fontSize: 11, color: '#9CA3AF' },
     likeButton: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-    reviewRowFavoriteButton: { padding: 8 },
     likeCount: { fontSize: 12, color: '#6B7280' },
 
     // Sorting
@@ -1448,41 +1389,6 @@ const styles = StyleSheet.create({
     sortButtonActive: { backgroundColor: '#4B0082' },
     sortText: { fontSize: 12, color: '#6B7280', fontWeight: '500' },
     sortTextActive: { color: '#fff' },
-    favoriteSection: { marginBottom: 16 },
-    favoriteSectionTitle: { fontSize: 14, fontWeight: '600', color: '#374151', paddingHorizontal: 20, marginBottom: 10 },
-    favoriteListContent: { paddingHorizontal: 20, paddingRight: 8 },
-    favoriteReviewCard: {
-        width: 240,
-        backgroundColor: '#FEF3C7',
-        borderRadius: 12,
-        padding: 12,
-        marginRight: 10,
-        borderWidth: 1,
-        borderColor: '#FDE68A',
-    },
-    favoriteReviewHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 8,
-    },
-    favoriteReviewAuthor: {
-        fontSize: 12,
-        fontWeight: '700',
-        color: '#92400E',
-        flex: 1,
-        marginRight: 6,
-    },
-    favoriteReviewContent: {
-        fontSize: 12,
-        color: '#78350F',
-        lineHeight: 18,
-        marginBottom: 8,
-    },
-    favoriteReviewMeta: {
-        fontSize: 11,
-        color: '#A16207',
-    },
 
     // Chat
     chatContainer: { paddingHorizontal: 20, paddingBottom: 20 },

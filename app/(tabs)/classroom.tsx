@@ -12,7 +12,13 @@ import {
     View
 } from 'react-native';
 import { CAMPUS_BUILDINGS } from '../../data/buildings';
+import { getCurrentUser } from '../../services/auth';
 import { getBuildings } from '../../services/buildings';
+import {
+    loadBuildingFavorites,
+    saveBuildingFavoritesLocal,
+    setBuildingFavoriteRemote
+} from '../../services/favorites';
 
 export default function ClassroomIndex() {
     const { t } = useTranslation();
@@ -20,6 +26,8 @@ export default function ClassroomIndex() {
     const [searchQuery, setSearchQuery] = useState('');
     const [favorites, setFavorites] = useState<string[]>([]);
     const [buildingsData, setBuildingsData] = useState(CAMPUS_BUILDINGS);
+    const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+    const [allowRemoteFavorites, setAllowRemoteFavorites] = useState(false);
 
     React.useEffect(() => {
         const fetchBuildings = async () => {
@@ -32,7 +40,21 @@ export default function ClassroomIndex() {
                 console.error('Failed to fetch buildings for classroom tab', e);
             }
         };
+        const loadFavorites = async () => {
+            try {
+                const user = await getCurrentUser();
+                const canRemote = !!user?.uid && !user?.isDemo;
+                setCurrentUserId(canRemote ? user.uid : null);
+                setAllowRemoteFavorites(canRemote);
+
+                const ids = await loadBuildingFavorites(canRemote ? user.uid : null, canRemote);
+                setFavorites(ids);
+            } catch (e) {
+                console.error('Error loading building favorites:', e);
+            }
+        };
         fetchBuildings();
+        loadFavorites();
     }, []);
 
     const filteredBuildings = searchQuery.trim()
@@ -51,11 +73,29 @@ export default function ClassroomIndex() {
         Keyboard.dismiss();
     };
 
-    const toggleFavorite = (id: string) => {
+    const toggleFavorite = async (id: string) => {
         if (favorites.includes(id)) {
-            setFavorites(favorites.filter(fav => fav !== id));
+            const nextFavorites = favorites.filter(fav => fav !== id);
+            setFavorites(nextFavorites);
+            try {
+                await saveBuildingFavoritesLocal(nextFavorites);
+                if (allowRemoteFavorites && currentUserId) {
+                    await setBuildingFavoriteRemote(currentUserId, id, false);
+                }
+            } catch (e) {
+                console.error('Error saving building favorites:', e);
+            }
         } else {
-            setFavorites([...favorites, id]);
+            const nextFavorites = [...favorites, id];
+            setFavorites(nextFavorites);
+            try {
+                await saveBuildingFavoritesLocal(nextFavorites);
+                if (allowRemoteFavorites && currentUserId) {
+                    await setBuildingFavoriteRemote(currentUserId, id, true);
+                }
+            } catch (e) {
+                console.error('Error saving building favorites:', e);
+            }
         }
     };
 

@@ -41,6 +41,8 @@
     "courses": {
         "title": "Course Review",
         "search_placeholder": "Enter course code...",
+        "favorites": "My Favorites",
+        "all_courses": "All Courses",
         "add_new_course": "Add New Course",
         "no_courses_found": "No courses found"
     },
@@ -84,6 +86,8 @@
             "food": "Food",
             "buildings": "Buildings",
             "classroom": "Room",
+            "find_classroom": "Find Classroom",
+            "order_food": "Online Order",
             "show": "Show",
             "hide": "Hide",
             "edit": "Edit",

@@ -1115,7 +1115,7 @@ export default function MapScreen() {
 
                 <TouchableOpacity style={styles.iconButton} onPress={handleFindClassroom}>
                     <Building size={20} color="#4B0082" />
-                    <Text style={styles.iconButtonText}>{t('map.overlay.classroom')}</Text>
+                    <Text style={styles.iconButtonText}>{t('map.overlay.find_classroom')}</Text>
                 </TouchableOpacity>
 
                 {showBuildingMap && (
@@ -1136,7 +1136,7 @@ export default function MapScreen() {
 
                 <TouchableOpacity style={styles.iconButton} onPress={handleFindFood}>
                     <Utensils size={20} color="#E65100" />
-                    <Text style={styles.iconButtonText}>{t('map.overlay.food')}</Text>
+                    <Text style={styles.iconButtonText}>{t('map.overlay.order_food')}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity

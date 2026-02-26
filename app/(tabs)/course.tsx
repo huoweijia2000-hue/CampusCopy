@@ -12,7 +12,13 @@ import {
     View
 } from 'react-native';
 import { Skeleton } from '../../components/common/Skeleton';
+import { getCurrentUser } from '../../services/auth';
 import { getLocalCourses } from '../../services/courses';
+import {
+    loadCourseFavorites,
+    saveCourseFavoritesLocal,
+    setCourseFavoriteRemote
+} from '../../services/favorites';
 import { supabase } from '../../services/supabase';
 import { Course } from '../../types';
 
@@ -35,8 +41,11 @@ export default function CoursesScreen() {
     const { t } = useTranslation();
     const [searchQuery, setSearchQuery] = useState('');
     const [courses, setCourses] = useState<Course[]>([]);
+    const [favoriteCourseIds, setFavoriteCourseIds] = useState<string[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+    const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+    const [allowRemoteFavorites, setAllowRemoteFavorites] = useState(false);
 
     const CourseSkeleton = () => (
         <View style={styles.skeletonCard}>
@@ -124,8 +133,40 @@ export default function CoursesScreen() {
     useFocusEffect(
         useCallback(() => {
             fetchCourses(true); // Silent update on focus
+            loadFavorites();
         }, [])
     );
+
+    const loadFavorites = async () => {
+        try {
+            const user = await getCurrentUser();
+            const canRemote = !!user?.uid && !user?.isDemo;
+            setCurrentUserId(canRemote ? user.uid : null);
+            setAllowRemoteFavorites(canRemote);
+
+            const ids = await loadCourseFavorites(canRemote ? user.uid : null, canRemote);
+            setFavoriteCourseIds(ids);
+        } catch (e) {
+            console.error('Error loading favorite courses:', e);
+        }
+    };
+
+    const toggleFavorite = async (courseId: string) => {
+        const isFavorite = favoriteCourseIds.includes(courseId);
+        const nextFavorites = isFavorite
+            ? favoriteCourseIds.filter(id => id !== courseId)
+            : [...favoriteCourseIds, courseId];
+        setFavoriteCourseIds(nextFavorites);
+
+        try {
+            await saveCourseFavoritesLocal(nextFavorites);
+            if (allowRemoteFavorites && currentUserId) {
+                await setCourseFavoriteRemote(currentUserId, courseId, !isFavorite);
+            }
+        } catch (e) {
+            console.error('Error saving favorite courses:', e);
+        }
+    };
 
     const filteredCourses = courses.filter(course => {
         const query = (searchQuery || '').toLowerCase();
@@ -135,6 +176,7 @@ export default function CoursesScreen() {
             (course.instructor || '').toLowerCase().includes(query)
         );
     });
+    const favoriteCourses = courses.filter(course => favoriteCourseIds.includes(course.id));
 
     const handleCoursePress = (courseId: string) => {
         router.push(`/courses/${courseId}` as any);
@@ -149,20 +191,37 @@ export default function CoursesScreen() {
             style={styles.courseCard}
             onPress={() => handleCoursePress(item.id)}
         >
-            <View style={styles.courseHeader}>
-                <View style={styles.codeContainer}>
-                    <Text style={styles.courseCode}>{item.code}</Text>
+            <View style={styles.courseRow}>
+                <View style={styles.courseMain}>
+                    <View style={styles.courseHeader}>
+                        <View style={styles.codeContainer}>
+                            <Text style={styles.courseCode}>{item.code}</Text>
+                        </View>
+                    </View>
+                    <Text style={styles.courseName}>{item.name}</Text>
+                    <Text style={styles.deptText}>{item.department}</Text>
                 </View>
-                <View style={styles.ratingContainer}>
-                    <Star size={14} color="#FFD700" fill="#FFD700" />
-                    <Text style={styles.ratingText}>{(item.rating || 0).toFixed(1)}</Text>
+
+                <View style={styles.courseStatsColumn}>
+                    <View style={styles.ratingContainer}>
+                        <Star size={14} color="#FFD700" fill="#FFD700" />
+                        <Text style={styles.ratingText}>{(item.rating || 0).toFixed(1)}</Text>
+                    </View>
+                    <TouchableOpacity
+                        style={styles.favoriteButton}
+                        onPress={(e: any) => {
+                            e?.stopPropagation?.();
+                            toggleFavorite(item.id);
+                        }}
+                    >
+                        <Star
+                            size={18}
+                            color={favoriteCourseIds.includes(item.id) ? '#FFD700' : '#D1D5DB'}
+                            fill={favoriteCourseIds.includes(item.id) ? '#FFD700' : 'transparent'}
+                        />
+                    </TouchableOpacity>
+                    <Text style={styles.reviewCount}>{t('teachers.reviews_count', { count: item.reviewCount })}</Text>
                 </View>
-            </View>
-            <Text style={styles.courseName}>{item.name}</Text>
-            {/* <Text style={styles.instructorText}>👨‍🏫 {item.instructor}</Text> */}
-            <View style={styles.cardFooter}>
-                <Text style={styles.deptText}>{item.department}</Text>
-                <Text style={styles.reviewCount}>{t('teachers.reviews_count', { count: item.reviewCount })}</Text>
             </View>
         </TouchableOpacity>
     );
@@ -174,9 +233,6 @@ export default function CoursesScreen() {
                 <View style={styles.headerRow}>
                     <Text style={styles.headerTitle}>{t('courses.title')}</Text>
                     <View style={styles.headerRightActions}>
-                        <TouchableOpacity style={styles.headerActionButton} onPress={() => router.push('/teachers' as any)}>
-                            <Star size={20} color="#fff" />
-                        </TouchableOpacity>
                         <TouchableOpacity style={styles.headerActionButton} onPress={handleAddCourse}>
                             <Plus size={24} color="#fff" />
                         </TouchableOpacity>
@@ -197,6 +253,29 @@ export default function CoursesScreen() {
                     />
                 </View>
             </View>
+
+            {favoriteCourses.length > 0 && !searchQuery && (
+                <View style={styles.favoritesSection}>
+                    <Text style={styles.favoritesTitle}>⭐ {t('courses.favorites')}</Text>
+                    <FlatList
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        data={favoriteCourses}
+                        keyExtractor={(item) => `fav-${item.id}`}
+                        contentContainerStyle={styles.favoritesList}
+                        renderItem={({ item }) => (
+                            <TouchableOpacity
+                                style={styles.favoriteCard}
+                                onPress={() => handleCoursePress(item.id)}
+                            >
+                                <Text style={styles.favoriteCode}>{(item.code || '').toUpperCase()}</Text>
+                            </TouchableOpacity>
+                        )}
+                    />
+                </View>
+            )}
+
+            <Text style={styles.allCoursesTitle}>{t('courses.all_courses')}</Text>
 
             {/* Course List */}
             <FlatList
@@ -317,6 +396,38 @@ const styles = StyleSheet.create({
         padding: 20,
         paddingTop: 12,
     },
+    favoritesSection: { paddingTop: 12, paddingBottom: 8 },
+    favoritesTitle: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#374151',
+        paddingHorizontal: 20,
+        marginBottom: 12,
+    },
+    favoritesList: { paddingHorizontal: 20 },
+    favoriteCard: {
+        backgroundColor: '#FEF3C7',
+        borderRadius: 12,
+        paddingHorizontal: 14,
+        paddingVertical: 10,
+        marginRight: 10,
+        maxWidth: 180,
+        borderWidth: 1,
+        borderColor: '#FDE68A',
+    },
+    favoriteCode: {
+        fontSize: 13,
+        fontWeight: '700',
+        color: '#92400E',
+    },
+    allCoursesTitle: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#374151',
+        paddingHorizontal: 20,
+        marginTop: 4,
+        marginBottom: 8,
+    },
     courseCard: {
         backgroundColor: '#fff',
         borderRadius: 16,
@@ -328,9 +439,17 @@ const styles = StyleSheet.create({
         shadowRadius: 4,
         elevation: 2,
     },
+    courseRow: {
+        flexDirection: 'row',
+        alignItems: 'stretch',
+    },
+    courseMain: {
+        flex: 1,
+        paddingRight: 12,
+    },
     courseHeader: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
+        justifyContent: 'flex-start',
         alignItems: 'center',
         marginBottom: 8,
     },
@@ -359,6 +478,14 @@ const styles = StyleSheet.create({
         color: '#F59E0B',
         marginLeft: 4,
     },
+    courseStatsColumn: {
+        width: 90,
+        alignItems: 'flex-end',
+        justifyContent: 'space-between',
+    },
+    favoriteButton: {
+        padding: 8,
+    },
     courseName: {
         fontSize: 16,
         fontWeight: 'bold',
@@ -383,8 +510,9 @@ const styles = StyleSheet.create({
         color: '#6B7280',
     },
     reviewCount: {
-        fontSize: 12,
+        fontSize: 11,
         color: '#9CA3AF',
+        textAlign: 'right',
     },
     emptyState: {
         alignItems: 'center',
